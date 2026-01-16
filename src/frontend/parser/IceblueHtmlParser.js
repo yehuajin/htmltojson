@@ -120,6 +120,27 @@ class IceblueHtmlParser {
       try {
         const { JSDOM } = require('jsdom');
         const dom = new JSDOM(html);
+        
+        // 将 jsdom 的 window 对象暴露到全局，以便 DomTraverser 可以访问 Node 和 NodeFilter
+        if (typeof global !== 'undefined') {
+          // 保存原始的全局对象（如果存在）
+          if (!global._originalNode) {
+            global._originalNode = global.Node;
+          }
+          if (!global._originalDocument) {
+            global._originalDocument = global.document;
+          }
+          if (!global._originalNodeFilter) {
+            global._originalNodeFilter = global.NodeFilter;
+          }
+          
+          // 设置 jsdom 的全局对象
+          global.Node = dom.window.Node;
+          global.document = dom.window.document;
+          global.NodeFilter = dom.window.NodeFilter;
+          global.Document = dom.window.Document;
+        }
+        
         return dom.window.document;
       } catch (error) {
         throw new Error('JSDOM is required in Node.js environment. Please install jsdom: npm install jsdom');

@@ -3,6 +3,55 @@
  * 用于遍历DOM树并提取信息
  */
 
+// 获取 Node 常量的辅助函数（兼容浏览器和 Node.js 环境）
+function getNodeConstants() {
+  // 浏览器环境
+  if (typeof window !== 'undefined' && window.Node) {
+    return window.Node;
+  }
+  // Node.js 环境（jsdom）
+  if (typeof global !== 'undefined' && global.Node) {
+    return global.Node;
+  }
+  // 降级：使用数值常量
+  return {
+    ELEMENT_NODE: 1,
+    TEXT_NODE: 3,
+    COMMENT_NODE: 8,
+    DOCUMENT_NODE: 9
+  };
+}
+
+// 获取 NodeFilter 常量的辅助函数
+function getNodeFilter() {
+  if (typeof window !== 'undefined' && window.NodeFilter) {
+    return window.NodeFilter;
+  }
+  if (typeof global !== 'undefined' && global.NodeFilter) {
+    return global.NodeFilter;
+  }
+  // 降级：使用数值常量
+  return {
+    SHOW_ELEMENT: 1,
+    FILTER_ACCEPT: 1,
+    FILTER_REJECT: 2
+  };
+}
+
+// 获取 document 对象的辅助函数
+function getDocument(node) {
+  if (node && node.ownerDocument) {
+    return node.ownerDocument;
+  }
+  if (typeof window !== 'undefined' && window.document) {
+    return window.document;
+  }
+  if (typeof global !== 'undefined' && global.document) {
+    return global.document;
+  }
+  return null;
+}
+
 class DomTraverser {
   constructor(options = {}) {
     this.maxDepth = options.maxDepth || 100;
@@ -58,19 +107,22 @@ class DomTraverser {
    * @returns {Object|null} 节点对象
    */
   processNode(node, context) {
-    switch (node.nodeType) {
-      case Node.ELEMENT_NODE:
-        return this.processElement(node, context);
-      
-      case Node.TEXT_NODE:
-        return this.processText(node, context);
-      
-      case Node.COMMENT_NODE:
-        return this.processComment(node, context);
-      
-      default:
-        return null;
+    const Node = getNodeConstants();
+    const nodeType = node.nodeType;
+    
+    if (nodeType === Node.ELEMENT_NODE || nodeType === 1) {
+      return this.processElement(node, context);
     }
+    
+    if (nodeType === Node.TEXT_NODE || nodeType === 3) {
+      return this.processText(node, context);
+    }
+    
+    if (nodeType === Node.COMMENT_NODE || nodeType === 8) {
+      return this.processComment(node, context);
+    }
+    
+    return null;
   }
 
   /**
@@ -178,21 +230,62 @@ class DomTraverser {
    */
   findNodesByTag(root, tagName) {
     const results = [];
-    const walker = document.createTreeWalker(
-      root,
-      NodeFilter.SHOW_ELEMENT,
-      {
-        acceptNode: (node) => {
-          return node.tagName.toLowerCase() === tagName.toLowerCase()
-            ? NodeFilter.FILTER_ACCEPT
-            : NodeFilter.FILTER_REJECT;
+    const doc = getDocument(root);
+    const NodeFilter = getNodeFilter();
+    
+    if (!doc || typeof doc.createTreeWalker !== 'function') {
+      // 降级：使用递归查找
+      const findRecursive = (node) => {
+        const Node = getNodeConstants();
+        if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === 1) {
+          if (node.tagName && node.tagName.toLowerCase() === tagName.toLowerCase()) {
+            results.push(node);
+          }
         }
-      }
-    );
+        if (node.childNodes) {
+          for (const child of node.childNodes) {
+            findRecursive(child);
+          }
+        }
+      };
+      findRecursive(root);
+      return results;
+    }
+    
+    try {
+      const walker = doc.createTreeWalker(
+        root,
+        NodeFilter.SHOW_ELEMENT || 1,
+        {
+          acceptNode: (node) => {
+            if (!node.tagName) return NodeFilter.FILTER_REJECT || 2;
+            return node.tagName.toLowerCase() === tagName.toLowerCase()
+              ? (NodeFilter.FILTER_ACCEPT || 1)
+              : (NodeFilter.FILTER_REJECT || 2);
+          }
+        }
+      );
 
-    let node;
-    while (node = walker.nextNode()) {
-      results.push(node);
+      let node;
+      while (node = walker.nextNode()) {
+        results.push(node);
+      }
+    } catch (error) {
+      // 如果 TreeWalker 失败，使用递归方法
+      const findRecursive = (node) => {
+        const Node = getNodeConstants();
+        if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === 1) {
+          if (node.tagName && node.tagName.toLowerCase() === tagName.toLowerCase()) {
+            results.push(node);
+          }
+        }
+        if (node.childNodes) {
+          for (const child of node.childNodes) {
+            findRecursive(child);
+          }
+        }
+      };
+      findRecursive(root);
     }
 
     return results;

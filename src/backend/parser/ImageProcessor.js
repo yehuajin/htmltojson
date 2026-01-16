@@ -4,11 +4,20 @@
  */
 
 const axios = require('axios');
-const sharp = require('sharp');
 const crypto = require('crypto');
 const fs = require('fs').promises;
 const path = require('path');
 const UrlUtils = require('../../frontend/utils/UrlUtils');
+
+// 尝试加载 sharp，如果失败则设为 null
+let sharp = null;
+try {
+  sharp = require('sharp');
+} catch (error) {
+  // sharp 未安装或加载失败，图片优化功能将不可用
+  console.warn('sharp is not installed. Image optimization features will be disabled.');
+  console.warn('To enable image processing, install sharp: npm install sharp');
+}
 
 class ImageProcessor {
   constructor(options = {}) {
@@ -23,6 +32,15 @@ class ImageProcessor {
       timeout: options.timeout || 5000,
       ...options
     };
+
+    // 检查 sharp 是否可用
+    this.hasSharp = sharp !== null;
+
+    // 如果启用了优化但 sharp 不可用，发出警告
+    if (this.options.optimize && !this.hasSharp) {
+      console.warn('Image optimization is enabled but sharp is not available. Optimization will be skipped.');
+      this.options.optimize = false;
+    }
 
     // 确保输出目录存在
     if (this.options.download || this.options.outputDir) {
@@ -136,6 +154,10 @@ class ImageProcessor {
    * @returns {Promise<Object>} 优化后的图片数据
    */
   async optimize(buffer, options = {}) {
+    if (!this.hasSharp) {
+      throw new Error('Image optimization requires sharp. Please install it: npm install sharp');
+    }
+
     try {
       let image = sharp(buffer);
 
@@ -182,6 +204,23 @@ class ImageProcessor {
    * @returns {Promise<Object>} 图片信息
    */
   async getImageInfo(url, options = {}) {
+    if (!this.hasSharp) {
+      // 降级：只返回基本信息
+      try {
+        const imageData = await this.download(url, { ...options, saveToDisk: false });
+        return {
+          size: imageData.size,
+          mimeType: imageData.mimeType,
+          width: null,
+          height: null,
+          format: null,
+          note: 'Detailed image info requires sharp. Install it: npm install sharp'
+        };
+      } catch (error) {
+        throw new Error(`Failed to get image info: ${error.message}`);
+      }
+    }
+
     try {
       const imageData = await this.download(url, { ...options, saveToDisk: false });
       const metadata = await sharp(imageData.buffer).metadata();
@@ -270,6 +309,21 @@ class ImageProcessor {
    * @returns {Promise<boolean>} 是否为有效图片
    */
   async validateImage(buffer) {
+    if (!this.hasSharp) {
+      // 降级：简单检查文件头
+      const imageSignatures = [
+        [0xFF, 0xD8, 0xFF], // JPEG
+        [0x89, 0x50, 0x4E, 0x47], // PNG
+        [0x47, 0x49, 0x46], // GIF
+        [0x52, 0x49, 0x46, 0x46] // WEBP (RIFF)
+      ];
+
+      const bufferStart = Array.from(buffer.slice(0, 4));
+      return imageSignatures.some(sig => 
+        sig.every((byte, index) => bufferStart[index] === byte)
+      );
+    }
+
     try {
       await sharp(buffer).metadata();
       return true;

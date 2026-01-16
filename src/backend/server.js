@@ -3,8 +3,12 @@
  * 提供HTML解析API服务
  */
 
+// 加载 polyfills（必须在其他模块之前）
+require('./polyfills');
+
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const config = require('../../config/default');
 const BackendParser = require('./parser/BackendParser');
 const ProxyService = require('./proxy/ProxyService');
@@ -32,6 +36,9 @@ const loggingMiddleware = new LoggingMiddleware(appConfig.logging);
 app.use(cors(appConfig.server.cors));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 静态文件服务（前端页面）
+app.use(express.static(path.join(__dirname, '../../public')));
 
 // 日志中间件
 app.use(loggingMiddleware.requestLogger());
@@ -225,13 +232,17 @@ apiRouter.get('/stats', (req, res) => {
 // 挂载API路由
 app.use('/api', apiRouter);
 
-// 404处理
+// 404处理 - API请求返回JSON，其他请求返回前端页面
 app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Not Found',
-    errorCode: 'NOT_FOUND'
-  });
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({
+      success: false,
+      error: 'Not Found',
+      errorCode: 'NOT_FOUND'
+    });
+  }
+  // 非API请求返回前端页面
+  res.sendFile(path.join(__dirname, '../../public/index.html'));
 });
 
 // 错误处理中间件
