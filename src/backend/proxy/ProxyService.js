@@ -82,11 +82,41 @@ class ProxyService {
         url: response.request.res.responseUrl || url
       };
     } catch (error) {
+      // 更详细的错误信息
+      let errorMessage = error.message || 'Unknown error';
+      let errorCode = error.code;
+      
+      // 处理常见的网络错误
+      if (error.code === 'ECONNREFUSED') {
+        errorMessage = `连接被拒绝: ${url}`;
+      } else if (error.code === 'ETIMEDOUT') {
+        errorMessage = `请求超时: ${url}`;
+      } else if (error.code === 'ENOTFOUND') {
+        errorMessage = `无法解析主机名: ${url}`;
+      } else if (error.code === 'ECONNRESET') {
+        errorMessage = `连接被重置: ${url}`;
+      } else if (error.response) {
+        // HTTP错误响应
+        errorMessage = `HTTP ${error.response.status}: ${error.response.statusText || error.message}`;
+      } else if (error.request && !error.response) {
+        errorMessage = `无法连接到服务器: ${url}`;
+      }
+      
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
         status: error.response ? error.response.status : null,
-        code: error.code
+        code: errorCode,
+        details: {
+          url: url,
+          message: error.message,
+          code: error.code,
+          response: error.response ? {
+            status: error.response.status,
+            statusText: error.response.statusText,
+            headers: error.response.headers
+          } : null
+        }
       };
     }
   }
@@ -104,7 +134,12 @@ class ProxyService {
     });
 
     if (!result.success) {
-      throw new Error(result.error || 'Failed to fetch HTML');
+      // 创建一个详细的错误对象
+      const error = new Error(result.error || 'Failed to fetch HTML');
+      error.details = result.details || {};
+      error.status = result.status;
+      error.code = result.code;
+      throw error;
     }
 
     return result.data;

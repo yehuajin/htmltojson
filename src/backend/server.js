@@ -120,11 +120,33 @@ apiRouter.post('/parse-url', async (req, res) => {
     if (result.success) {
       res.json(result);
     } else {
-      const statusCode = result.errorCode === 'NETWORK_ERROR' ? 502 : 500;
+      // 根据错误类型返回相应的HTTP状态码
+      let statusCode = 500;
+      if (result.errorCode === 'NETWORK_ERROR') {
+        statusCode = 502; // Bad Gateway
+      } else if (result.errorCode === 'HTTP_ERROR') {
+        // 如果获取到了HTTP状态码，使用它；否则使用502
+        statusCode = result.details?.status || 502;
+      } else if (result.errorCode === 'INVALID_INPUT') {
+        statusCode = 400;
+      }
+      
+      // 记录详细的错误日志
+      loggingMiddleware.error('Parse URL failed', {
+        url: url,
+        error: result.error,
+        errorCode: result.errorCode,
+        details: result.details
+      });
+      
       res.status(statusCode).json(result);
     }
   } catch (error) {
-    loggingMiddleware.error('Parse URL error', { error: error.message, stack: error.stack });
+    loggingMiddleware.error('Parse URL error', { 
+      error: error.message, 
+      stack: error.stack,
+      url: req.body.url 
+    });
     res.status(500).json({
       success: false,
       error: error.message,

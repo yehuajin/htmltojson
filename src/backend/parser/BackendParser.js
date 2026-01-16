@@ -93,17 +93,8 @@ class BackendParser {
         timeout: parseOptions.timeout || 30000
       });
 
-      if (!htmlResult.success) {
-        return {
-          success: false,
-          error: htmlResult.error || 'Failed to fetch HTML',
-          errorCode: 'NETWORK_ERROR',
-          duration: Date.now() - startTime
-        };
-      }
-
-      // 解析HTML
-      const result = await this.parse(htmlResult.data, {
+      // 解析HTML（htmlResult 已经是HTML字符串，因为 fetchHTML 成功返回的是 data）
+      const result = await this.parse(htmlResult, {
         ...parseOptions,
         url
       });
@@ -112,11 +103,33 @@ class BackendParser {
       return result;
 
     } catch (error) {
+      // 更详细的错误信息
+      let errorCode = 'PARSE_FAILED';
+      let errorMessage = error.message;
+      
+      // 判断错误类型
+      if (error.code === 'ECONNREFUSED' || 
+          error.code === 'ETIMEDOUT' || 
+          error.code === 'ENOTFOUND' ||
+          error.code === 'ECONNRESET' ||
+          error.code === 'ERR_NETWORK' ||
+          (error.request && !error.response)) {
+        errorCode = 'NETWORK_ERROR';
+      } else if (error.response && error.response.status) {
+        errorCode = 'HTTP_ERROR';
+        errorMessage = `HTTP ${error.response.status}: ${error.response.statusText || error.message}`;
+      }
+      
       return {
         success: false,
-        error: error.message,
-        errorCode: 'PARSE_FAILED',
-        duration: Date.now() - startTime
+        error: errorMessage,
+        errorCode: errorCode,
+        duration: Date.now() - startTime,
+        details: error.details || {
+          code: error.code,
+          status: error.status || (error.response ? error.response.status : null),
+          url: url
+        }
       };
     }
   }

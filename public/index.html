@@ -84,6 +84,25 @@
                                 <span>仅文本</span>
                             </label>
                         </div>
+                        <div class="options-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                            <label class="radio-label" style="display: block; margin-bottom: 12px;">
+                                <strong>URL解析方式：</strong>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="parse-mode" id="parse-mode-server" value="server" checked>
+                                <span>服务端解析（推荐）</span>
+                                <small style="display: block; color: var(--text-secondary); margin-left: 24px; font-size: 0.85rem;">
+                                    绕过CORS限制，可访问内网地址
+                                </small>
+                            </label>
+                            <label class="radio-label" style="margin-top: 8px;">
+                                <input type="radio" name="parse-mode" id="parse-mode-client" value="client">
+                                <span>客户端解析</span>
+                                <small style="display: block; color: var(--text-secondary); margin-left: 24px; font-size: 0.85rem;">
+                                    直接请求，更快响应（可能受CORS限制）
+                                </small>
+                            </label>
+                        </div>
                     </details>
                 </div>
             </section>
@@ -138,7 +157,7 @@
 
                     <!-- 原始数据 -->
                     <div class="result-panel" id="raw-panel">
-                        <pre id="raw-result"><code></code></pre>
+                        <div id="raw-result"></div>
                     </div>
 
                     <!-- 统计信息 -->
